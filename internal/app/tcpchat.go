@@ -53,14 +53,15 @@ func (c *Chat) listenForConnections(listener net.Listener) {
 		}
 
 		connId := uuid.New().String() // генерируем уникальный строковый идентирфикатор подключения
+		c.logger.Infof("New connecton uuid: %s", connId)
 		c.connMap.Store(connId, conn) // сохраняем новое подключение в карту
 
-		go c.handleUserConnection(conn) // обрабатываем каждое новое подключение в отдельной горутине
+		go c.handleUserConnection(connId, conn) // обрабатываем каждое новое подключение в отдельной горутине
 	}
 }
 
 // обрабатывает каждое отдельное подключение
-func (c *Chat) handleUserConnection(conn net.Conn) {
+func (c *Chat) handleUserConnection(connId string, conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
 		if err != nil {
@@ -75,11 +76,19 @@ func (c *Chat) handleUserConnection(conn net.Conn) {
 			return
 		}
 
+		c.logger.Infof("New message by %s: %s", connId, input)
+
 		// когда данные получены, проходимся по всем сохраненным подключениям чтобы в них писать
 		c.connMap.Range(func(key, value interface{}) bool {
+			if key == connId {
+				return true
+			}
+
 			if conn, ok := value.(net.Conn); ok {
 				if _, err := conn.Write([]byte(input)); err != nil {
 					c.logger.Error("error on writing to connection")
+				} else {
+					c.logger.Infof("\"%s\" received message \"%s\"", key, input)
 				}
 			}
 
